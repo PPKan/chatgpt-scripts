@@ -1,2 +1,5 @@
 openai
 python-dotenv
+bs4
+lxml
+python-dotenv
