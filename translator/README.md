@@ -27,3 +27,10 @@
 1. 下載python (google python)
 2. 運行 `pip install -r requirements.txt` 下載所需的模組
 3. 運行 python translator.py
+
+## 後續新增的功能
+
+1. 簡轉繁(確認用)
+2. threading
+3. add chunks and timing
+4. 指定資料夾
