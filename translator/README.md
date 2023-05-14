@@ -1,5 +1,5 @@
 這個簡單的程式作為prompt engineering上完課之後的第一個小專案，
-把我平常很懶得閱讀的stratechery用chatgpt翻譯成繁體中文(有時候會出包變成簡體)，
+把我平常很懶得閱讀的stratechery用chatgpt翻譯成繁體中文，
 具體是用beautifulsoap4抽取裡面的article tag，把article tag翻譯成中文，
 然後再插入回去html裡面
 
@@ -7,7 +7,7 @@
 
 ![](https://imgur.com/a/KK6iXEE)
 
-簡單說明一下這怎麼跑 由於我真的很累的就寫得比較隨便 有空再改
+簡單說明一下這怎麼跑
 
 ### 下載檔案
 
@@ -32,5 +32,3 @@
 
 1. 簡轉繁(確認用)
 2. threading
-3. add chunks and timing
-4. 指定資料夾

@@ -1,63 +1,97 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Stratechery Translater
-
-# ## Read Stratechery file
-
-# In[41]:
-
-
 import sys
+import argparse
 from bs4 import BeautifulSoup
-
+import os
+import openai
+from dotenv import load_dotenv, find_dotenv
+from typing import List
+# from datetime import datetime
 
 def get_file_name():
-    # Check the number of command-line arguments
-    if len(sys.argv) != 2:
-        print("使用方法： python3 myscript.py <filename.html>")
-        print("範例： python3 myscript.py example.html")
-        sys.exit()
+    """
+    :returns: 
+        - file_path - Path to the file
+        - model - model of chatgpt, preset to gpt-3.5-turbo
+        - temperature - temperature of chatgpt, preset to 0
+        - chunk_size - chunk size for adapting the chatgpt model, preset to 3500
 
-    # Get the first command-line argument
-    filename = sys.argv[1]
+    Get the file name from system arguments.
+
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file', help='HTML file to process')
+    parser.add_argument('--model', type=str, default='gpt-3.5-turbo', help='model of chatgpt, preset to gpt-3.5-turbo')
+    parser.add_argument('--temperature', type=int, default=0, help='temperature of chatgpt, preset to 0')
+    parser.add_argument('--chunk-size', type=int, default=3500, help='chunk size for adapting the chatgpt model, preset to 3500')
+    
+    args = parser.parse_args()
 
     # Check if the argument is an HTML file
-    if not filename.endswith('.html'):
+    if not args.file.endswith('.html'):
         print("錯誤：檔案必須是.html檔案")
         sys.exit()
 
-    return filename
+    return args.file, args.model, args.temperature, args.chunk_size
 
-def get_article_tag(html):
+def get_article_tag(html) -> str:
+    """
+    :param html: The stratechery html article string
+
+    Extract article tag from a html string
+    """
+    # read html code with bs4
     soup = BeautifulSoup(html, 'lxml')
 
+    # get the article tag
     article_tag = soup.find('article')
+
+    # print('成功抽出文章內容')
 
     return str(article_tag)
 
-def insert_modified_article_tag(html, modified_article_tag):
+def insert_article_tag(html: str, modified_article_tag: str) -> str:
+    """
+    :param html: The original html code used to be inserted.
+    :param modified_article_tag: The translated article tag.
+
+    Insert The modified article tag into original html code and return in string format.
+    """
+    # read html code with bs4
     soup = BeautifulSoup(html, 'lxml')
 
+    # replace the original article tag with the new one
     original_article_tag = soup.find('article')
     if original_article_tag:
         new_article_tag = BeautifulSoup(modified_article_tag, 'lxml').article
         if new_article_tag:
             original_article_tag.replace_with(new_article_tag)
+        else:
+            print("讀取翻譯後article tag失敗")
+    else:
+        print("讀取原檔案失敗: 找不到<article>")
 
     return str(soup)
 
-def read_html_file(file_path):
+def read_html_file(file_path: str):
+    """
+    :param file_path: file path to the html code
+
+    read the html file path and return as html format file.
+    """
+
     with open(file_path, 'r', encoding='utf-8') as post_file:
         whole_html = post_file.read()
+        print(f"成功讀取檔案 {file_path}")
     return whole_html
 
-import os
-import openai
-
 def load_api_key():
-    from dotenv import load_dotenv, find_dotenv
-    
+    """
+    Load api key from dotenv and save it as a glocal variable: openai.api_key
+    """
+
     # Check if .env file exists
     try:
         _ = load_dotenv(find_dotenv())
@@ -66,53 +100,87 @@ def load_api_key():
         sys.exit()
     
     openai.api_key  = os.getenv('OPENAI_API_KEY')
+    return
 
+# def get_completion(prompt: str, model, temperature) -> str:
+#     """
+#     :param prompt: prompt the run the chat-gpt model
+#     :param model: chatgpt model, preset to gpt-3.5-turbo
+#     :param temperature: temperature to talk to chatgpt, preset to 0.
 
-# In[32]:
+#     Basic chatgpt-api function to ask for chat.
+#     """
+#     messages = [{"role": "user", "content": prompt}]
+#     response = openai.ChatCompletion.create(
+#         model=model,
+#         messages=messages,
+#         temperature=0, # this is the degree of randomness of the model's output
+#     )
+#     return response.choices[0].message["content"]
 
+def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", temperature=0) -> str:
+    """
+    :param article_tag: The article tag in English fro translate in string format.
+    :param chunk_size: The length of each chunk being splitted to adapt the api word length limitation.
 
-def get_completion(prompt, model="gpt-3.5-turbo"):
-    messages = [{"role": "user", "content": prompt}]
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        temperature=0, # this is the degree of randomness of the model's output
-    )
-    return response.choices[0].message["content"]
+    Main function that takes a string as input to talk to chatgpt to translate the string into zh-hant-tw.
+    1. Split the article tag into an array with read_string_in_chunks function.
+    2. Iterate through the array to translate each chunk.
+    3. Put the translated chunk into a new array.
+    """
 
-def get_completion_from_messages(messages, model="gpt-3.5-turbo", temperature=0):
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        temperature=temperature, # this is the degree of randomness of the model's output
-    )
-#     print(str(response.choices[0].message))
-    return response.choices[0].message["content"]
+    def read_string_in_chunks(input_string: str, chunk_size) -> List[str]:
+        """
+        :param input_string: The input string for split into array.
+        :param chunk_size: The size of characters to trim.
 
+        The function reads a string then truncate them into a array based on the chunk_size parameter.
+        """
+        for i in range(0, len(input_string), chunk_size):
+            yield input_string[i:i + chunk_size]
 
-# ### main functions to interact with chatgpt api to translate the html
+    def get_completion_from_messages(messages, model, temperature):
+        """
+        :param messages: messages the run the chat-gpt model (include role and chat in json format)
+        :param model: chatgpt model, preset to gpt-3.5-turbo
+        :param temperature: temperature to talk to chatgpt, preset to 0.
 
-# In[33]:
+        Chatgpt-api function to ask for chat with messages set.
+        """
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            temperature=temperature, # this is the degree of randomness of the model's output
+        )
+        return response.choices[0].message["content"]
 
+    def trim_strings(array: List[str]) -> List[str]:
+        """
+        :param array: The array of translated article tag.
 
-def read_string_in_chunks(input_string, chunk_size=3500):
-    for i in range(0, len(input_string), chunk_size):
-        yield input_string[i:i + chunk_size]
+        Iterate through the article tag to check if there's backsticks generated by chatgpt.
+        """
+        
+        for chunk in array:
+            first_three = chunk[:2]
+            if '```' in first_three:
+                chunk = chunk[2:]
+            last_three = chunk[-2:]
+            if '```' in last_three:
+                chunk = chunk[:-2]
+        
+        return array
 
-def process_with_chatgpt_api(chunk, chatgpt_api_func):
-    # Here you would call your chatgpt api function with the chunk as input.
-    response = chatgpt_api_func(chunk)
-    return response
+    # print how much token are used
+    print(f'耗費時元(token)數量: {len(article_tag)}')
 
-
-# In[34]:
-
-
-def translate_article(article_tag):
-    chunks = list(read_string_in_chunks(article_tag))
+    # make a article tag into a list of strings
+    chunks = list(read_string_in_chunks(article_tag, chunk_size))
     length = len(chunks)
-    
-    translated = []
+
+    # Initialize the translated array
+    translated_array = []
+
     for i, chunk in enumerate(chunks):
         
         messages =  [  
@@ -140,68 +208,76 @@ def translate_article(article_tag):
         """
         })
         
-        response = get_completion_from_messages(messages, temperature=0)
-        translated.append(response)    
+        # interact with chatgpt inside the iteration
+        print(f'正在翻譯第 {i+1}/{length} 個段落')
+        response = get_completion_from_messages(messages, model, temperature)
+        print(f'{i+1}/{length} 翻譯完畢')
+        translated_array.append(response)
     
-    return translated
+    # trim the array
+    translated_array = trim_strings(translated_array)    
 
+    # combine the array back into a string
+    translated_article_tag = ''.join(translated_array)
 
+    return translated_article_tag
 
-# ### Parse the array (trimming the unnecessary line break and backticks)
+def write_to_file(html, filename):
+    """
+    :param html: the html code to be written.
+    :param filename: the filename of the file.
 
-# In[36]:
-
-
-def trim_strings(array):
-    return [
-        s[3:-3] if s.startswith('```') and s.endswith('```') else
-        s[2:-2] if s.startswith('\n') and s.endswith('\n') else
-        s
-        for s in array
-    ]
-
-
-# ### Output the function to a file
-
-# In[38]:
-
-
-from datetime import datetime
-
-def write_to_file(text, optional_name=""):
-    
-    # Get the current date
-    current_date = datetime.now()
-
-    # Format the date as a string in the format "yymmdd"
-    date_string = current_date.strftime('%y%m%d')
+    Write the translated html code into the file inside translated directory
+    """
+    # Ensure the directory exists
+    directory = ".\\translated"
+    if not os.path.exists(directory):
+        print('tanslated資料夾不存在，已自動建立')
+        os.makedirs(directory)
 
     # Create the filename
-    filename = f"{date_string}-Stratechery{optional_name}.html"
-
+    filename = f"{directory}\\Translated_{filename}.html"
+    
     # Write the text to the file
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write(text)      
+        f.write(html)
+        print(f'檔案已儲存於 {filename}')
     
     return filename
 
-# In[39]:
 
+
+import sys
 
 def main():
-    load_api_key()
-    file_path = get_file_name()
-    print('成功讀取檔案')
-    whole_html = read_html_file(file_path)
-    article_tag = get_article_tag(whole_html)
-    print('翻譯中，這會花一點時間')
-    translated_array = translate_article(article_tag)
-    print('翻譯完成，正在處理資料')
-    trimmed_translated_array = trim_strings(translated_array)
-    translated = ''.join(trimmed_translated_array)
-    translated_html = insert_modified_article_tag(whole_html, translated)
-    filename = write_to_file(translated_html)
-    print(f'已寫入檔案 -- {filename}')
-    
+    try:
+        # load the api key
+        load_api_key()
+
+        # get user input
+        file_path, model, temperature, chunk_size = get_file_name()
+
+        # read html file and store the html into a variable
+        english_whole_html = read_html_file(file_path)
+
+        # extract the article tag from the html
+        english_article_tag = get_article_tag(english_whole_html)
+
+        # main process for translating the article tag from English to Zh-Hant-TW
+        translated_article_tag = translate_article(english_article_tag)
+
+        # insert the html tag back into the original html code.
+        translated_html = insert_article_tag(english_whole_html, translated_article_tag)
+
+        # set file_name from file_path
+        file_name = os.path.basename(file_path)
+
+        # write the file to translated directory
+        write_to_file(translated_html, file_name)
+
+    except KeyboardInterrupt:
+        print("\nInterrupted by user. Exiting...")
+        sys.exit(0)  # or any other exit code indicating abrupt termination
+
 if __name__ == "__main__":
     main()
