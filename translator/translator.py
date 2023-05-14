@@ -8,6 +8,7 @@ import os
 import openai
 from dotenv import load_dotenv, find_dotenv
 from typing import List
+import opencc
 # from datetime import datetime
 
 def get_file_name():
@@ -139,7 +140,7 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
         for i in range(0, len(input_string), chunk_size):
             yield input_string[i:i + chunk_size]
 
-    def get_completion_from_messages(messages, model, temperature):
+    def get_completion_from_messages(messages, model, temperature) -> str:
         """
         :param messages: messages the run the chat-gpt model (include role and chat in json format)
         :param model: chatgpt model, preset to gpt-3.5-turbo
@@ -171,6 +172,18 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
         
         return array
 
+    def simplified_to_traditional(simplified_string) -> str:
+        """
+        :param simplified_string: a string to be convert to traditional Chinese
+
+        A function from opencc to convert a string of simplified Chinese to traditional Chinese.
+        """
+        converter = opencc.OpenCC('s2t.json')
+
+        traditional_string = converter.convert(simplified_string)
+
+        return traditional_string
+ 
     # print how much token are used
     print(f'耗費時元(token)數量: {len(article_tag)}')
 
@@ -211,6 +224,8 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
         # interact with chatgpt inside the iteration
         print(f'正在翻譯第 {i+1}/{length} 個段落')
         response = get_completion_from_messages(messages, model, temperature)
+        # convert simplified to traditional (which happenes occationally)
+        response = simplified_to_traditional(response)
         print(f'第 {i+1}/{length} 段落已翻譯完畢')
         translated_array.append(response)
     
@@ -250,34 +265,30 @@ def write_to_file(html, filename):
 import sys
 
 def main():
-    try:
-        # load the api key
-        load_api_key()
+    
+    # load the api key from .env file
+    load_api_key()
 
-        # get user input
-        file_path, model, temperature, chunk_size = get_file_name()
+    # get user input
+    file_path, model, temperature, chunk_size = get_file_name()
 
-        # read html file and store the html into a variable
-        english_whole_html = read_html_file(file_path)
+    # read html file and store the html into a variable
+    english_whole_html = read_html_file(file_path)
 
-        # extract the article tag from the html
-        english_article_tag = get_article_tag(english_whole_html)
+    # extract the article tag from the html
+    english_article_tag = get_article_tag(english_whole_html)
 
-        # main process for translating the article tag from English to Zh-Hant-TW
-        translated_article_tag = translate_article(english_article_tag)
+    # main process for translating the article tag from English to Zh-Hant-TW
+    translated_article_tag = translate_article(english_article_tag)
 
-        # insert the html tag back into the original html code.
-        translated_html = insert_article_tag(english_whole_html, translated_article_tag)
+    # insert the html tag back into the original html code.
+    translated_html = insert_article_tag(english_whole_html, translated_article_tag)
 
-        # set file_name from file_path
-        file_name = os.path.basename(file_path)
+    # set file_name from file_path
+    file_name = os.path.basename(file_path)
 
-        # write the file to translated directory
-        write_to_file(translated_html, file_name)
-
-    except KeyboardInterrupt:
-        print("\nInterrupted by user. Exiting...")
-        sys.exit(0)  # or any other exit code indicating abrupt termination
+    # write the file to translated directory
+    write_to_file(translated_html, file_name)
 
 if __name__ == "__main__":
     main()
