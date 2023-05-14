@@ -13,18 +13,24 @@
 ### usage
 translator.py [-h] [--model MODEL] [--temperature TEMPERATURE] [--chunk-size CHUNK_SIZE] [--max-workers MAX_WORKERS] file
 
-positional arguments:
-  file                  HTML file to process
+#### positional arguments:
+  file -  HTML file to process
 
-optional arguments:
-  -h, --help            show this help message and exit
-  --model MODEL         model of chatgpt, preset to gpt-3.5-turbo
-  --temperature TEMPERATURE
-                        temperature of chatgpt, preset to 0
-  --chunk-size CHUNK_SIZE
-                        chunk size for adapting the chatgpt model, preset to 3500
-  --max-workers MAX_WORKERS
-                        Max workers to do threading, default set to 4
+#### optional arguments:  
+  -h, --help  
+  show this help message and exit
+
+  --model MODEL  
+  model of chatgpt, preset to gpt-3.5-turbo
+
+  --temperature TEMPERATURE  
+  temperature of chatgpt, preset to 0  
+
+  --chunk-size CHUNK_SIZE  
+  chunk size for adapting the chatgpt model, preset to 3500
+
+  --max-workers MAX_WORKERS  
+  Max workers to do threading, default set to 4
 
 ## 詳細步驟
 ### 下載檔案
