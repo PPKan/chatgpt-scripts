@@ -236,7 +236,7 @@ def write_to_file(html, filename):
         os.makedirs(directory)
 
     # Create the filename
-    filename = f"{directory}\\Translated_{filename}.html"
+    filename = f"{directory}\\Translated_{filename}"
     
     # Write the text to the file
     with open(filename, 'w', encoding='utf-8') as f:
