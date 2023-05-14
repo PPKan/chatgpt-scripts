@@ -211,7 +211,7 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
         # interact with chatgpt inside the iteration
         print(f'正在翻譯第 {i+1}/{length} 個段落')
         response = get_completion_from_messages(messages, model, temperature)
-        print(f'{i+1}/{length} 翻譯完畢')
+        print(f'第 {i+1}/{length} 段落已翻譯完畢')
         translated_array.append(response)
     
     # trim the array
