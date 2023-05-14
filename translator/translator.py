@@ -106,22 +106,6 @@ def load_api_key():
     openai.api_key  = os.getenv('OPENAI_API_KEY')
     return
 
-# def get_completion(prompt: str, model, temperature) -> str:
-#     """
-#     :param prompt: prompt the run the chat-gpt model
-#     :param model: chatgpt model, preset to gpt-3.5-turbo
-#     :param temperature: temperature to talk to chatgpt, preset to 0.
-
-#     Basic chatgpt-api function to ask for chat.
-#     """
-#     messages = [{"role": "user", "content": prompt}]
-#     response = openai.ChatCompletion.create(
-#         model=model,
-#         messages=messages,
-#         temperature=0, # this is the degree of randomness of the model's output
-#     )
-#     return response.choices[0].message["content"]
-
 def translate_article(article_tag: str, chunk_size: int, model: str, temperature: int, max_workers: int) -> str:
     """
     :param article_tag: The article tag in English fro translate in string format.
@@ -277,10 +261,6 @@ def write_to_file(html, filename):
         print(f'檔案已儲存於 {filename}')
     
     return filename
-
-
-
-import sys
 
 def main():
     
