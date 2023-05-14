@@ -9,6 +9,7 @@ import openai
 from dotenv import load_dotenv, find_dotenv
 from typing import List
 import opencc
+from concurrent.futures import ThreadPoolExecutor
 # from datetime import datetime
 
 def get_file_name():
@@ -18,6 +19,7 @@ def get_file_name():
         - model - model of chatgpt, preset to gpt-3.5-turbo
         - temperature - temperature of chatgpt, preset to 0
         - chunk_size - chunk size for adapting the chatgpt model, preset to 3500
+        - max_workers - Max workers to do threading, default set to 4
 
     Get the file name from system arguments.
 
@@ -27,6 +29,7 @@ def get_file_name():
     parser.add_argument('--model', type=str, default='gpt-3.5-turbo', help='model of chatgpt, preset to gpt-3.5-turbo')
     parser.add_argument('--temperature', type=int, default=0, help='temperature of chatgpt, preset to 0')
     parser.add_argument('--chunk-size', type=int, default=3500, help='chunk size for adapting the chatgpt model, preset to 3500')
+    parser.add_argument('--max-workers', type=int, default=4, help='Max workers to do threading, default set to 4')
     
     args = parser.parse_args()
 
@@ -35,7 +38,7 @@ def get_file_name():
         print("錯誤：檔案必須是.html檔案")
         sys.exit()
 
-    return args.file, args.model, args.temperature, args.chunk_size
+    return args.file, args.model, args.temperature, args.chunk_size, args.max_workers
 
 def get_article_tag(html) -> str:
     """
@@ -119,10 +122,13 @@ def load_api_key():
 #     )
 #     return response.choices[0].message["content"]
 
-def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", temperature=0) -> str:
+def translate_article(article_tag: str, chunk_size: int, model: str, temperature: int, max_workers: int) -> str:
     """
     :param article_tag: The article tag in English fro translate in string format.
     :param chunk_size: The length of each chunk being splitted to adapt the api word length limitation.
+    :param model: Chat gpt model.
+    :param temperature: Chat gpt api temperature.
+    :param max_workers: Number of threading.
 
     Main function that takes a string as input to talk to chatgpt to translate the string into zh-hant-tw.
     1. Split the article tag into an array with read_string_in_chunks function.
@@ -163,12 +169,10 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
         """
         
         for chunk in array:
-            first_three = chunk[:2]
-            if '```' in first_three:
-                chunk = chunk[2:]
-            last_three = chunk[-2:]
-            if '```' in last_three:
-                chunk = chunk[:-2]
+            if chunk.startswith('```'):
+                chunk = chunk[3:]
+            if chunk.endswith('```'):
+                chunk = chunk[:-3]
         
         return array
 
@@ -186,16 +190,16 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
  
     # print how much token are used
     print(f'耗費時元(token)數量: {len(article_tag)}')
+    print(f'預估耗費金額: {len(article_tag) / 1000 * 0.002}')
 
     # make a article tag into a list of strings
     chunks = list(read_string_in_chunks(article_tag, chunk_size))
     length = len(chunks)
 
-    # Initialize the translated array
-    translated_array = []
-
-    for i, chunk in enumerate(chunks):
-        
+    def process_chunk(i, chunk):
+        """
+        A worker for impolementing threading.
+        """
         messages =  [  
         {'role':'system', 'content':'You are an technology article professional translater at translating article from English to zh-hant-tw.'},
         {'role':'assistant', 'content':'Ok, I am a professional translator from English to zh-hant-tw.'}
@@ -227,8 +231,16 @@ def translate_article(article_tag: str, chunk_size=3500, model="gpt-3.5-turbo", 
         # convert simplified to traditional (which happenes occationally)
         response = simplified_to_traditional(response)
         print(f'第 {i+1}/{length} 段落已翻譯完畢')
-        translated_array.append(response)
-    
+        return response
+
+    # create a ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers) as executor:
+        # submit tasks to the executor
+        futures = [executor.submit(process_chunk, i, chunk) for i, chunk in enumerate(chunks)]
+
+    # collect results as they become available
+    translated_array = [future.result() for future in futures]
+
     # trim the array
     translated_array = trim_strings(translated_array)    
 
@@ -270,7 +282,7 @@ def main():
     load_api_key()
 
     # get user input
-    file_path, model, temperature, chunk_size = get_file_name()
+    file_path, model, temperature, chunk_size, max_workers = get_file_name()
 
     # read html file and store the html into a variable
     english_whole_html = read_html_file(file_path)
@@ -279,7 +291,7 @@ def main():
     english_article_tag = get_article_tag(english_whole_html)
 
     # main process for translating the article tag from English to Zh-Hant-TW
-    translated_article_tag = translate_article(english_article_tag)
+    translated_article_tag = translate_article(english_article_tag,chunk_size=chunk_size, model=model, temperature=temperature, max_workers=max_workers)
 
     # insert the html tag back into the original html code.
     translated_html = insert_article_tag(english_whole_html, translated_article_tag)
