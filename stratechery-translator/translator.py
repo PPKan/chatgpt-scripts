@@ -228,11 +228,9 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
 
     # collect results as they become available
     translated_array = [future.result() for future in futures]
-    print('array 1\n', translated_array)
 
     # trim the array
     translated_array = trim_strings(translated_array)    
-    print('array 2\n', translated_array)
 
     # combine the array back into a string
     translated_article_tag = ''.join(translated_array)
