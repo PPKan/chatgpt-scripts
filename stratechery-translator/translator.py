@@ -10,35 +10,79 @@ from dotenv import load_dotenv, find_dotenv
 from typing import List
 import opencc
 from concurrent.futures import ThreadPoolExecutor
+import requests
+from urllib.parse import urlparse
+import webbrowser
 # from datetime import datetime
 
-def get_file_name():
+def load_api_key():
+    """
+    Load api key from dotenv and save it as a glocal variable: openai.api_key
+    """
+
+    # Check if .env file exists
+    try:
+        _ = load_dotenv(find_dotenv())
+    except FileNotFoundError:
+        print("錯誤：請將 '.env.template' 更名為 '.env'，並加入您的 OpenAI API 金鑰。")
+        sys.exit()
+    
+    openai.api_key  = os.getenv('OPENAI_API_KEY')
+    return
+
+def is_valid_url(url: str) -> bool:
+    """
+    :param url: The URL string to be checked
+
+    Check if a URL is valid
+    """
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
+
+def get_url_and_params():
     """
     :returns: 
-        - file_path - Path to the file
+        - url - URL of the webpage to process
         - model - model of chatgpt, preset to gpt-3.5-turbo
         - temperature - temperature of chatgpt, preset to 0
         - chunk_size - chunk size for adapting the chatgpt model, preset to 3500
         - max_workers - Max workers to do threading, default set to 4
 
-    Get the file name from system arguments.
+    Get the URL from system arguments.
 
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('file', help='HTML file to process')
+    parser.add_argument('url', help='URL of the webpage to process')
     parser.add_argument('--model', type=str, default='gpt-3.5-turbo', help='model of chatgpt, preset to gpt-3.5-turbo')
     parser.add_argument('--temperature', type=int, default=0, help='temperature of chatgpt, preset to 0')
     parser.add_argument('--chunk-size', type=int, default=3500, help='chunk size for adapting the chatgpt model, preset to 3500')
     parser.add_argument('--max-workers', type=int, default=4, help='Max workers to do threading, default set to 4')
-    
+
     args = parser.parse_args()
 
-    # Check if the argument is an HTML file
-    if not args.file.endswith('.html'):
-        print("錯誤：檔案必須是.html檔案")
+    # Check if the argument is a valid URL
+    if not is_valid_url(args.url):
+        print("錯誤：必須提供有效的網址")
         sys.exit()
 
-    return args.file, args.model, args.temperature, args.chunk_size, args.max_workers
+    return args.url, args.model, args.temperature, args.chunk_size, args.max_workers
+
+def read_html_from_url(url: str):
+    """
+    :param url: URL to the webpage
+
+    Send a GET request to the provided URL and return its HTML content.
+    """
+
+    response = requests.get(url)
+    response.raise_for_status()  # If the request failed, this will raise a HTTPError
+
+    whole_html = response.text
+    print(f"Successfully retrieved HTML from {url}")
+    return whole_html
 
 def get_article_tag(html) -> str:
     """
@@ -79,32 +123,7 @@ def insert_article_tag(html: str, modified_article_tag: str) -> str:
 
     return str(soup)
 
-def read_html_file(file_path: str):
-    """
-    :param file_path: file path to the html code
 
-    read the html file path and return as html format file.
-    """
-
-    with open(file_path, 'r', encoding='utf-8') as post_file:
-        whole_html = post_file.read()
-        print(f"成功讀取檔案 {file_path}")
-    return whole_html
-
-def load_api_key():
-    """
-    Load api key from dotenv and save it as a glocal variable: openai.api_key
-    """
-
-    # Check if .env file exists
-    try:
-        _ = load_dotenv(find_dotenv())
-    except FileNotFoundError:
-        print("錯誤：請將 '.env.template' 更名為 '.env'，並加入您的 OpenAI API 金鑰。")
-        sys.exit()
-    
-    openai.api_key  = os.getenv('OPENAI_API_KEY')
-    return
 
 def translate_article(article_tag: str, chunk_size: int, model: str, temperature: int, max_workers: int) -> str:
     """
@@ -237,7 +256,19 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
 
     return translated_article_tag
 
-def write_to_file(html, filename):
+def extract_title_from_url(url: str) -> str:
+    """
+    :param url: The URL of the article
+
+    Extract the title of the article from the URL
+    """
+    parsed_url = urlparse(url)
+    
+    # Split the path and take the last part as the title
+    title = parsed_url.path.split('/')[2]
+    return title
+
+def write_to_file(html, title):
     """
     :param html: the html code to be written.
     :param filename: the filename of the file.
@@ -251,14 +282,28 @@ def write_to_file(html, filename):
         os.makedirs(directory)
 
     # Create the filename
-    filename = f"{directory}\\Translated_{filename}"
-    
+    file_path = f"{directory}\\Translated_{title}.html"
     # Write the text to the file
-    with open(filename, 'w', encoding='utf-8') as f:
+    with open(file_path, 'w', encoding='utf-8') as f:
         f.write(html)
-        print(f'檔案已儲存於 {filename}')
+        print(f'檔案已儲存於 {file_path}')
     
-    return filename
+    return file_path
+
+def open_html_file(file_path: str):
+    """
+    :param file_path: The path to the HTML file
+
+    Open the HTML file in the default web browser
+    """
+    # Check if the file exists
+    if not os.path.isfile(file_path):
+        print(f"The file {file_path} does not exist.")
+        return
+
+    # Open the file in the default browser
+    webbrowser.open('file://' + os.path.realpath(file_path))
+
 
 def main():
     
@@ -266,10 +311,10 @@ def main():
     load_api_key()
 
     # get user input
-    file_path, model, temperature, chunk_size, max_workers = get_file_name()
+    url, model, temperature, chunk_size, max_workers = get_url_and_params()
 
     # read html file and store the html into a variable
-    english_whole_html = read_html_file(file_path)
+    english_whole_html = read_html_from_url(url)
 
     # extract the article tag from the html
     english_article_tag = get_article_tag(english_whole_html)
@@ -280,11 +325,14 @@ def main():
     # insert the html tag back into the original html code.
     translated_html = insert_article_tag(english_whole_html, translated_article_tag)
 
-    # set file_name from file_path
-    file_name = os.path.basename(file_path)
+    # extract title form url
+    title = extract_title_from_url(url)
 
     # write the file to translated directory
-    write_to_file(translated_html, file_name)
+    file_path = write_to_file(translated_html, title)
+    
+    # open the translated file with default browser
+    open_html_file(file_path)
 
 if __name__ == "__main__":
     main()
