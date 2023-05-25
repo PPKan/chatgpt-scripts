@@ -3,7 +3,7 @@
 
 import sys
 import argparse
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 import os
 import openai
 from dotenv import load_dotenv, find_dotenv
@@ -140,10 +140,29 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
     """
 
     def read_html_in_chunks(input_html: str, chunk_size: int) -> List[str]:
+        """
+        :param input_html: The input HTML content to split.
+        :param chunk_size: The maximum size for each chunk.
+        
+        Split HTML content into chunks without breaking HTML tags.
+
+        This function takes a string of HTML content and a chunk size as input and 
+        returns a list of chunks of the HTML content. Each chunk is guaranteed to 
+        be no larger than the specified chunk size and will not split any HTML tags 
+        across chunks. If a text within a tag is longer than the chunk size, the 
+        text will be split across multiple chunks.
+
+        Returns:
+        chunks (List[str]): The list of chunks of the input HTML content.
+
+        Example:
+        input_html = "<p>This is a long paragraph that needs to be split into chunks...</p>"
+        chunks = read_html_in_chunks(input_html, 100)
+        """
         soup = BeautifulSoup(input_html, 'html.parser')
         chunks = []
         current_chunk = ''
-        
+
         def add_to_chunk(text: str):
             nonlocal current_chunk
             while len(text) > 0:
@@ -157,7 +176,7 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
                     text = text[remaining:]
                     chunks.append(current_chunk)
                     current_chunk = ''
-                    
+
         for token in soup:
             if isinstance(token, NavigableString):
                 add_to_chunk(str(token))
@@ -169,11 +188,11 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
                     current_chunk = tag_str
                 else:
                     current_chunk += tag_str
-                    
+
         # Append last chunk
         if current_chunk:
             chunks.append(current_chunk)
-        
+
         return chunks
 
 
