@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup, NavigableString
 import os
 import openai
 from dotenv import load_dotenv, find_dotenv
-from typing import List
+from typing import List, Generator
 import opencc
 from concurrent.futures import ThreadPoolExecutor
 import requests
@@ -81,7 +81,7 @@ def read_html_from_url(url: str):
     response.raise_for_status()  # If the request failed, this will raise a HTTPError
 
     whole_html = response.text
-    print(f"Successfully retrieved HTML from {url}")
+    print(f"成功讀取檔案")
     return whole_html
 
 def get_article_tag(html) -> str:
@@ -139,61 +139,60 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
     3. Put the translated chunk into a new array.
     """
 
-    def read_html_in_chunks(input_html: str, chunk_size: int) -> List[str]:
-        """
-        :param input_html: The input HTML content to split.
-        :param chunk_size: The maximum size for each chunk.
-        
-        Split HTML content into chunks without breaking HTML tags.
+def read_html_in_chunks(input_html: str, chunk_size: int) -> Generator[str, None, None]:
+    """
+    Yields HTML content in chunks without breaking HTML tags.
 
-        This function takes a string of HTML content and a chunk size as input and 
-        returns a list of chunks of the HTML content. Each chunk is guaranteed to 
-        be no larger than the specified chunk size and will not split any HTML tags 
-        across chunks. If a text within a tag is longer than the chunk size, the 
-        text will be split across multiple chunks.
+    This function takes a string of HTML content and a chunk size as input and 
+    yields chunks of the HTML content. Each chunk is guaranteed to 
+    be no larger than the specified chunk size and will not split any HTML tags 
+    across chunks. If a text within a tag is longer than the chunk size, the 
+    text will be split across multiple chunks.
 
-        Returns:
-        chunks (List[str]): The list of chunks of the input HTML content.
+    Parameters:
+    input_html (str): The input HTML content to split.
+    chunk_size (int): The maximum size for each chunk.
 
-        Example:
-        input_html = "<p>This is a long paragraph that needs to be split into chunks...</p>"
-        chunks = read_html_in_chunks(input_html, 100)
-        """
-        soup = BeautifulSoup(input_html, 'html.parser')
-        chunks = []
-        current_chunk = ''
+    Yields:
+    str: The next chunk of the input HTML content.
 
-        def add_to_chunk(text: str):
-            nonlocal current_chunk
-            while len(text) > 0:
-                remaining = chunk_size - len(current_chunk)
-                if len(text) <= remaining:
-                    current_chunk += text
-                    text = ''
-                else:
-                    # Take only as much text as we can fit in the current chunk
-                    current_chunk += text[:remaining]
-                    text = text[remaining:]
-                    chunks.append(current_chunk)
-                    current_chunk = ''
+    Example:
+    input_html = "<p>This is a long paragraph that needs to be split into chunks...</p>"
+    for chunk in read_html_in_chunks(input_html, 100):
+        print(chunk)
+    """
+    soup = BeautifulSoup(input_html, 'html.parser')
+    current_chunk = ''
+    
+    def add_to_chunk(text: str):
+        nonlocal current_chunk
+        while len(text) > 0:
+            remaining = chunk_size - len(current_chunk)
+            if len(text) <= remaining:
+                current_chunk += text
+                text = ''
+            else:
+                current_chunk += text[:remaining]
+                text = text[remaining:]
+                yield current_chunk
+                current_chunk = ''
+                
+    for token in soup:
+        if isinstance(token, NavigableString):
+            yield from add_to_chunk(str(token))
+        else:  # Tag
+            tag_str = str(token)
+            if len(current_chunk) + len(tag_str) > chunk_size:
+                if current_chunk:
+                    yield current_chunk
+                current_chunk = tag_str
+            else:
+                current_chunk += tag_str
+                
+    # Yield last chunk
+    if current_chunk:
+        yield current_chunk
 
-        for token in soup:
-            if isinstance(token, NavigableString):
-                add_to_chunk(str(token))
-            else:  # Tag
-                tag_str = str(token)
-                if len(current_chunk) + len(tag_str) > chunk_size:
-                    if current_chunk:
-                        chunks.append(current_chunk)
-                    current_chunk = tag_str
-                else:
-                    current_chunk += tag_str
-
-        # Append last chunk
-        if current_chunk:
-            chunks.append(current_chunk)
-
-        return chunks
 
 
     def get_completion_from_messages(messages, model, temperature) -> str:
@@ -247,7 +246,7 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
     print(f'預估耗費金額: {len(article_tag) / 1000 * 0.002}')
 
     # make a article tag into a list of strings
-    chunks = list(read_string_in_chunks(article_tag, chunk_size))
+    chunks = list(read_html_in_chunks(article_tag, chunk_size))
     length = len(chunks)
 
     def process_chunk(i, chunk):
