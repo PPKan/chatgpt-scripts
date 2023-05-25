@@ -139,15 +139,43 @@ def translate_article(article_tag: str, chunk_size: int, model: str, temperature
     3. Put the translated chunk into a new array.
     """
 
-    def read_string_in_chunks(input_string: str, chunk_size) -> List[str]:
-        """
-        :param input_string: The input string for split into array.
-        :param chunk_size: The size of characters to trim.
+    def read_html_in_chunks(input_html: str, chunk_size: int) -> List[str]:
+        soup = BeautifulSoup(input_html, 'html.parser')
+        chunks = []
+        current_chunk = ''
+        
+        def add_to_chunk(text: str):
+            nonlocal current_chunk
+            while len(text) > 0:
+                remaining = chunk_size - len(current_chunk)
+                if len(text) <= remaining:
+                    current_chunk += text
+                    text = ''
+                else:
+                    # Take only as much text as we can fit in the current chunk
+                    current_chunk += text[:remaining]
+                    text = text[remaining:]
+                    chunks.append(current_chunk)
+                    current_chunk = ''
+                    
+        for token in soup:
+            if isinstance(token, NavigableString):
+                add_to_chunk(str(token))
+            else:  # Tag
+                tag_str = str(token)
+                if len(current_chunk) + len(tag_str) > chunk_size:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = tag_str
+                else:
+                    current_chunk += tag_str
+                    
+        # Append last chunk
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        return chunks
 
-        The function reads a string then truncate them into a array based on the chunk_size parameter.
-        """
-        for i in range(0, len(input_string), chunk_size):
-            yield input_string[i:i + chunk_size]
 
     def get_completion_from_messages(messages, model, temperature) -> str:
         """
