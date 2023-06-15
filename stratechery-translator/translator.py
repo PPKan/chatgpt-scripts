@@ -59,7 +59,7 @@ def get_url_and_params():
     parser.add_argument('--model', type=str, default='gpt-3.5-turbo', help='model of chatgpt, preset to gpt-3.5-turbo')
     parser.add_argument('--temperature', type=int, default=0, help='temperature of chatgpt, preset to 0')
     parser.add_argument('--chunk-size', type=int, default=3500, help='chunk size for adapting the chatgpt model, preset to 3500')
-    parser.add_argument('--max-workers', type=int, default=4, help='Max workers to do threading, default set to 4')
+    parser.add_argument('--max-workers', type=int, default=15, help='Max workers to do threading, default set to 15')
 
     args = parser.parse_args()
 
@@ -81,7 +81,7 @@ def read_html_from_url(url: str):
     response.raise_for_status()  # If the request failed, this will raise a HTTPError
 
     whole_html = response.text
-    print(f"Successfully retrieved HTML from {url}")
+    # print(f"Successfully retrieved HTML from {url}")
     return whole_html
 
 def get_article_tag(html) -> str:
